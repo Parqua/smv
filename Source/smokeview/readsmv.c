@@ -313,6 +313,10 @@ void FreeLabels(flowlabels *flowlabel){
 /* ------------------ InitMesh ------------------------ */
 
 void InitMesh(meshdata *meshi){
+  meshi->smoke3d_soot = NULL;
+  meshi->smoke3d_hrrpuv = NULL;
+  meshi->smoke3d_temp = NULL;
+  meshi->smoke3d_co2 = NULL;
   meshi->above = NULL;
   meshi->smokeplaneinfo = NULL;
   meshi->nsmokeplaneinfo = 0;
@@ -2439,8 +2443,8 @@ void UpdateMeshCoords(void){
   patchout_zmin = zbar0ORIG;
   patchout_zmax = zbarORIG;
   patchout_tmin = 0.0;
-  if(view_tstop>0.0){
-    patchout_tmax = view_tstop;
+  if(tour_tstop>0.0){
+    patchout_tmax = tour_tstop;
   }
   else{
     patchout_tmax = 1.0;
@@ -2862,7 +2866,7 @@ int IsSliceDup(slicedata *sd, int nslice){
     if(slicei->ijk_min[1]!=sd->ijk_min[1]||slicei->ijk_max[1]!=sd->ijk_max[1])continue;
     if(slicei->ijk_min[2]!=sd->ijk_min[2]||slicei->ijk_max[2]!=sd->ijk_max[2])continue;
     if(strcmp(slicei->label.longlabel,sd->label.longlabel)!=0)continue;
-    if(slicei->slicefile_type!=sd->slicefile_type)continue;
+    if(slicei->slice_filetype!=sd->slice_filetype)continue;
     if(slicei->blocknumber!=sd->blocknumber)continue;
     if(slicei->volslice!=sd->volslice)continue;
     if(slicei->idir!=sd->idir)continue;
@@ -3575,9 +3579,7 @@ int ReadSMV(char *file, char *file2){
 
   char buffer[256],buffer2[256],*bufferptr,*bufferptr2;
   char bufferA[256], bufferB[256], bufferC[256], bufferD[256], bufferE[256], bufferF[256];
-#ifdef pp_SLICEGEOM
   patchdata *patchgeom;
-#endif
 #ifdef pp_READBUFFER
   bufferstreamdata streaminfo, *stream=&streaminfo;
 #else
@@ -4259,8 +4261,8 @@ int ReadSMV(char *file, char *file2){
       if(FGETS(buffer,255,stream)==NULL){
         BREAK;
       }
-      sscanf(buffer,"%f %f %i",&view_tstart,&view_tstop,&view_ntimes);
-      if(view_ntimes<2)view_ntimes=2;
+      sscanf(buffer,"%f %f %i",&tour_tstart,&tour_tstop,&tour_ntimes);
+      if(tour_ntimes<2)tour_ntimes=2;
       ReallocTourMemory();
       continue;
     }
@@ -4336,20 +4338,16 @@ int ReadSMV(char *file, char *file2){
         (Match(buffer, "SLCD") == 1) ||
         (Match(buffer, "SLFL") == 1) ||
         (Match(buffer,"SLCT") == 1)
-#ifdef pp_SLICEGEOM
         || (Match(buffer, "BNDS") == 1)
-#endif
       ){
       if(setup_only == 1||smoke3d_only==1)continue;
       nsliceinfo++;
       nslicefiles=nsliceinfo;
-#ifdef pp_SLICEGEOM
       if(Match(buffer, "BNDS") == 1){
         if(FGETS(buffer,255,stream)==NULL){
           BREAK;
         }
       }
-#endif
       if(FGETS(buffer,255,stream)==NULL){
         BREAK;
       }
@@ -4385,9 +4383,7 @@ int ReadSMV(char *file, char *file2){
       continue;
     }
     if(Match(buffer, "BNDF") == 1 || Match(buffer, "BNDC") == 1 || Match(buffer, "BNDE") == 1
-#ifndef pp_SLICEGEOM
       || Match(buffer, "BNDS") == 1
-#endif
       ){
       if(setup_only == 1||smoke3d_only==1)continue;
       npatchinfo++;
@@ -6620,7 +6616,7 @@ int ReadSMV(char *file, char *file2){
   if(nsurfinfo>0||ndevice_texture_list>0){
     if(NewMemory((void **)&textureinfo,(nsurfinfo+ndevice_texture_list)*sizeof(texturedata))==0)return 2;
   }
-  InitTextures();
+  if(use_graphics==1)InitTextures();
 
 /*
     Initialize blockage labels and blockage surface labels
@@ -8165,17 +8161,13 @@ typedef struct {
         (Match(buffer, "SLCD") == 1) ||
         (Match(buffer, "SLFL") == 1) ||
         (Match(buffer,"SLCT") == 1)
-#ifdef pp_SLICEGEOM
       || (Match(buffer, "BNDS") == 1)
-#endif
       ){
       char *slicelabelptr, slicelabel[256], *sliceparms, *sliceoffsetptr;
       float above_ground_level=0.0;
       float sliceoffset_fds=0.0;
       int terrain=0, cellcenter=0, facecenter=0, fire_line=0;
-#ifdef pp_SLICEGEOM
       int slicegeom=0;
-#endif
       int slcf_index = 0;
       char *char_slcf_index;
       int has_reg, has_comp;
@@ -8221,12 +8213,10 @@ typedef struct {
         strcpy(slicelabel,slicelabelptr);
         slicelabelptr=slicelabel;
       }
-#ifdef pp_SLICEGEOM
       if(Match(buffer,"BNDS") == 1){
         strcpy(bufferA,buffer);
         slicegeom=1;
       }
-#endif
       if(Match(buffer,"SLCT") == 1){
         terrain=1;
       }
@@ -8264,11 +8254,9 @@ typedef struct {
         nsliceinfo--;
         BREAK;
       }
-#ifdef pp_SLICEGEOM
       if(slicegeom == 1){
         strcpy(bufferB,buffer);
       }
-#endif
 
       bufferptr=TrimFrontBack(buffer);
       len=strlen(bufferptr);
@@ -8286,26 +8274,24 @@ typedef struct {
       sd->comp_file=NULL;
       sd->vol_file=NULL;
       sd->slicelabel=NULL;
-      sd->slicefile_type=SLICE_NODE_CENTER;
+      sd->slice_filetype=SLICE_NODE_CENTER;
       sd->patchgeom = NULL;
-#ifdef pp_SLICEGEOM
       if(slicegeom==1){
         patchdata *patchgeom;
 
-        sd->slicefile_type=SLICE_GEOM;
+        sd->slice_filetype=SLICE_GEOM;
         NewMemory((void **)&patchgeom,sizeof(patchdata));
         sd->patchgeom=patchgeom;
       }
-#endif
       if(terrain==1){
-        sd->slicefile_type=SLICE_TERRAIN;
+        sd->slice_filetype=SLICE_TERRAIN;
       }
-      if(fire_line==1)sd->slicefile_type=SLICE_FIRELINE;
+      if(fire_line==1)sd->slice_filetype=SLICE_FIRELINE;
       if(cellcenter==1){
-        sd->slicefile_type=SLICE_CELL_CENTER;
+        sd->slice_filetype=SLICE_CELL_CENTER;
       }
       if(facecenter == 1){
-        sd->slicefile_type = SLICE_FACE_CENTER;
+        sd->slice_filetype = SLICE_FACE_CENTER;
       }
 
       islicecount++;
@@ -8328,13 +8314,11 @@ typedef struct {
         if(FGETS(buffer,255,stream)==NULL){
           BREAK;
         }
-#ifdef pp_SLICEGEOM
         if(slicegeom==1){
           if(FGETS(buffer,255,stream)==NULL){
             BREAK;
           }
         }
-#endif
         continue;
       }
 
@@ -8353,8 +8337,6 @@ typedef struct {
         sd->file=sd->reg_file;
       }
 
-#ifdef pp_SLICEGEOM
-
 // read in geometry file name
 
       if(slicegeom==1){
@@ -8371,20 +8353,19 @@ typedef struct {
         NewMemory((void **)&sd->geom_file,(unsigned int)(lengeom+1));
         STRCPY(sd->geom_file,bufferptr2);
       }
-#endif
 
 // read in labels
 
-      if(sd->slicefile_type==SLICE_TERRAIN){
+      if(sd->slice_filetype==SLICE_TERRAIN){
         if(ReadLabels(&sd->label,stream,"(terrain)")==2)return 2;
       }
-      else if(sd->slicefile_type==SLICE_CELL_CENTER){
+      else if(sd->slice_filetype==SLICE_CELL_CENTER){
         if(ReadLabels(&sd->label,stream,"(cell centered)")==2)return 2;
       }
-      else if(sd->slicefile_type==SLICE_GEOM){
+      else if(sd->slice_filetype==SLICE_GEOM){
         if(ReadLabelsBNDS(&sd->label,stream,bufferD,bufferE,bufferF,"(geometry)")==2)return 2;
       }
-      else if(sd->slicefile_type == SLICE_FACE_CENTER){
+      else if(sd->slice_filetype == SLICE_FACE_CENTER){
         if(ReadLabels(&sd->label, stream,"(face centered)") == 2)return 2;
       }
       else{
@@ -8499,7 +8480,6 @@ typedef struct {
         continue;
       }
       sliceinfo_copy++;
-#ifdef pp_SLICEGEOM
       if(slicegeom==1){
         strcpy(buffer,bufferA);
         patchgeom = sd->patchgeom;
@@ -8507,9 +8487,6 @@ typedef struct {
       else{
         continue;
       }
-#else
-      continue;
-#endif
     }
   /*
     +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -8524,17 +8501,13 @@ typedef struct {
       int blocknumber;
       size_t len;
       char *filetype_label;
-#ifdef pp_SLICEGEOM
       int slicegeom=0;
-#endif
 
       if(setup_only == 1||smoke3d_only==1)continue;
 
-#ifdef pp_SLICEGEOM
       if(Match(buffer, "BNDS")==1){
         slicegeom=1;
       }
-#endif
       nn_patch++;
 
       TrimBack(buffer);
@@ -8554,16 +8527,12 @@ typedef struct {
         sscanf(buffer3,"%i %i",&blocknumber,&version);
         blocknumber--;
       }
-#ifdef pp_SLICEGEOM
       if(slicegeom==1){
         patchi = patchgeom;
       }
       else{
         patchi = patchinfo + ipatch;
       }
-#else
-      patchi = patchinfo + ipatch;
-#endif
 
       for(i = 0; i < 6; i++){
         patchi->ijk[i] = -1;
@@ -8622,7 +8591,6 @@ typedef struct {
         CheckMemory;
       }
 
-#ifdef pp_SLICEGEOM
       if(slicegeom==1){
         strcpy(buffer,bufferB);
       }
@@ -8632,17 +8600,15 @@ typedef struct {
           BREAK;
         }
       }
-#else
-      if(FGETS(buffer,255,stream)==NULL){
-        npatchinfo--;
-        BREAK;
-      }
-#endif
 
       bufferptr=TrimFrontBack(buffer);
       len=strlen(bufferptr);
       NewMemory((void **)&patchi->reg_file,(unsigned int)(len+1));
       STRCPY(patchi->reg_file,bufferptr);
+
+      NewMemory((void **)&patchi->bound_file, (unsigned int)(len+4+1));
+      STRCPY(patchi->bound_file, bufferptr);
+      strcat(patchi->bound_file, ".bnd");
 
       NewMemory((void **)&patchi->comp_file,(unsigned int)(len+4+1));
       STRCPY(patchi->comp_file,bufferptr);
@@ -8666,7 +8632,6 @@ typedef struct {
       if(patchi->structured == NO){
         int igeom;
 
-#ifdef pp_SLICEGEOM
       if(slicegeom==1){
         strcpy(buffer,bufferC);
       }
@@ -8676,12 +8641,6 @@ typedef struct {
           BREAK;
         }
       }
-#else
-      if(FGETS(buffer,255,stream)==NULL){
-        npatchinfo--;
-        BREAK;
-      }
-#endif
         bufferptr=TrimFrontBack(buffer);
         NewMemory((void **)&patchi->geomfile,strlen(bufferptr)+1);
         strcpy(patchi->geomfile,bufferptr);
@@ -8752,16 +8711,12 @@ typedef struct {
               strcpy(geomlabel2, " - Cut cell faces");
             }
           }
-#ifdef pp_SLICEGEOM
           if(slicegeom==1){
             if(ReadLabelsBNDS(&patchi->label,NULL,bufferD,bufferE,bufferF,geomlabel)==2)return 2;
           }
           else{
             if(ReadLabels(&patchi->label,stream,geomlabel)==2)return 2;
           }
-#else
-          if(ReadLabels(&patchi->label,stream,geomlabel)==2)return 2;
-#endif
         }
         strcpy(patchi->menulabel_base, patchi->label.longlabel);
         if(strlen(geomlabel2) > 0){
@@ -8770,11 +8725,7 @@ typedef struct {
         }
         NewMemory((void **)&patchi->histogram,sizeof(histogramdata));
         InitHistogram(patchi->histogram,NHIST_BUCKETS, NULL, NULL);
-#ifdef pp_SLICEGEOM
         if(slicegeom==0)ipatch++;
-#else
-        ipatch++;
-#endif
       }
       else{
         if(ReadLabels(&patchi->label,stream,NULL)==2)return 2;
@@ -8846,13 +8797,11 @@ typedef struct {
       isoi->levels=NULL;
       isoi->is_fed=0;
       isoi->memory_id = ++nmemory_ids;
-#ifdef pp_TISO
       isoi->geom_nstatics = NULL;
       isoi->geom_ndynamics=NULL;
       isoi->geom_times=NULL;
       isoi->geom_vals=NULL;
       isoi->histogram = NULL;
-#endif
 
       isoi->normaltable=NULL;
       isoi->color_label.longlabel=NULL;
@@ -9431,6 +9380,7 @@ typedef struct {
   GetFaceInfo();
 
   SetupMeshWalls();
+  update_windrose = 1;
 
   PRINTF("%s",_("complete"));
   PRINTF("\n\n");
@@ -9610,14 +9560,6 @@ int ReadIni2(char *inifile, int localfile){
       showgeom_outside_domain = CLAMP(showgeom_outside_domain, 0, 1);
       continue;
    }
-   if(Match(buffer, "CO2COLOR") == 1){
-      fgets(buffer, 255, stream);
-      sscanf(buffer, " %i %i %i", global_co2color,global_co2color+1,global_co2color+2);
-      global_co2color[0] = CLAMP(global_co2color[0], 0, 2550);
-      global_co2color[1] = CLAMP(global_co2color[1], 0, 2550);
-      global_co2color[2] = CLAMP(global_co2color[2], 0, 2550);
-        continue;
-    }
     if(Match(buffer, "SLICEDUP") == 1){
       fgets(buffer, 255, stream);
       sscanf(buffer, " %i %i %i", &slicedup_option, &vectorslicedup_option,&boundaryslicedup_option);
@@ -9640,9 +9582,14 @@ int ReadIni2(char *inifile, int localfile){
       sscanf(buffer, " %i %i", &freeze_volsmoke,&autofreeze_volsmoke);
       continue;
     }
+    if(Match(buffer, "GEOMOFFSET")==1){
+      fgets(buffer, 255, stream);
+      sscanf(buffer, " %f %f %f %i", &geom_delx, &geom_dely, &geom_delz, &show_geom_bndf);
+      continue;
+    }
     if(Match(buffer, "GEOMBOUNDARYPROPS")==1){
       fgets(buffer, 255, stream);
-      sscanf(buffer, " %i %i %i %f %F", &show_boundary_shaded, &show_boundary_outline, &show_boundary_points, &geomboundary_linewidth, &geomboundary_pointsize);
+      sscanf(buffer, " %i %i %i %f %f", &show_boundary_shaded, &show_boundary_outline, &show_boundary_points, &geomboundary_linewidth, &geomboundary_pointsize);
       ONEORZERO(show_boundary_shaded);
       ONEORZERO(show_boundary_outline);
       ONEORZERO(show_boundary_points);
@@ -10179,9 +10126,15 @@ int ReadIni2(char *inifile, int localfile){
     }
     if(Match(buffer, "FIRECOLORMAP") == 1){
       fgets(buffer, 255, stream);
-      sscanf(buffer, "%i %i", &firecolormap_type, &fire_colorbar_index_ini);
-      firecolormap_type_save = firecolormap_type;
+      sscanf(buffer, "%i %i", &fire_colormap_type, &fire_colorbar_index_ini);
+      fire_colormap_type_save = fire_colormap_type;
       update_fire_colorbar_index = 1;
+      continue;
+    }
+    if(Match(buffer, "CO2COLORMAP") == 1){
+      fgets(buffer, 255, stream);
+      sscanf(buffer, "%i %i", &co2_colormap_type, &co2_colorbar_index_ini);
+      update_co2_colorbar_index = 1;
       continue;
     }
     if(Match(buffer, "SHOWEXTREMEDATA") == 1){
@@ -10798,11 +10751,7 @@ int ReadIni2(char *inifile, int localfile){
     }
     if(Match(buffer, "LOADINC") == 1){
       fgets(buffer, 255, stream);
-#ifdef pp_CSLICE
       sscanf(buffer, "%i %i", &load_incremental,&use_cslice);
-#else
-      sscanf(buffer, "%i", &load_incremental);
-#endif
       continue;
     }
     if(Match(buffer, "MSCALE") == 1){
@@ -11886,14 +11835,28 @@ int ReadIni2(char *inifile, int localfile){
 #endif
       if(Match(buffer, "FIRECOLOR") == 1){
         if(fgets(buffer, 255, stream) == NULL)break;
-        sscanf(buffer, "%i %i %i", &fire_red, &fire_green, &fire_blue);
+        sscanf(buffer, "%i %i %i", fire_color_int255, fire_color_int255+1, fire_color_int255+2);
+        fire_color_int255[0] = CLAMP(fire_color_int255[0], 0, 255);
+        fire_color_int255[1] = CLAMP(fire_color_int255[1], 0, 255);
+        fire_color_int255[2] = CLAMP(fire_color_int255[2], 0, 255);
         continue;
       }
       if(Match(buffer, "SMOKECOLOR") == 1){
         if(fgets(buffer, 255, stream) == NULL)break;
-        sscanf(buffer, "%i %i %i", &smoke_red, &smoke_green, &smoke_blue);
+        sscanf(buffer, "%i %i %i", smoke_color_int255, smoke_color_int255+1, smoke_color_int255+2);
+        smoke_color_int255[0] = CLAMP(smoke_color_int255[0], 0, 255);
+        smoke_color_int255[1] = CLAMP(smoke_color_int255[1], 0, 255);
+        smoke_color_int255[2] = CLAMP(smoke_color_int255[2], 0, 255);
         continue;
       }
+      if(Match(buffer, "CO2COLOR") == 1){
+         fgets(buffer, 255, stream);
+         sscanf(buffer, " %i %i %i", co2_color_int255,co2_color_int255+1,co2_color_int255+2);
+         co2_color_int255[0] = CLAMP(co2_color_int255[0], 0, 255);
+         co2_color_int255[1] = CLAMP(co2_color_int255[1], 0, 255);
+         co2_color_int255[2] = CLAMP(co2_color_int255[2], 0, 255);
+         continue;
+       }
       if(Match(buffer, "FIREDEPTH") == 1){
         if(fgets(buffer, 255, stream) == NULL)break;
         sscanf(buffer, "%f %f", &fire_halfdepth,&co2_halfdepth);
@@ -11934,12 +11897,6 @@ int ReadIni2(char *inifile, int localfile){
         sscanf(buffer, "%i %i %f", &vis_threshold, &vis_onlythreshold, &temp_threshold);
         continue;
       }
-      if(Match(buffer, "TOURCONSTANTVEL") == 1){
-        if(fgets(buffer, 255, stream) == NULL)break;
-        sscanf(buffer, "%i", &tour_constant_vel);
-        tour_constant_vel = 1;
-        continue;
-      }
       if(Match(buffer, "TOUR_AVATAR") == 1){
         if(fgets(buffer, 255, stream) == NULL)break;
         //        sscanf(buffer,"%i %f %f %f %f",&tourlocus_type,tourcol_avatar,tourcol_avatar+1,tourcol_avatar+2,&tourrad_avatar);
@@ -11947,13 +11904,11 @@ int ReadIni2(char *inifile, int localfile){
         continue;
       }
       if(Match(buffer, "TOURCIRCLE") == 1){
-        float *c, *r, *v;
-
-        c = tour_circular_center;
-        v = tour_circular_view;
-        r = &tour_circular_radius;
         if(fgets(buffer, 255, stream) == NULL)break;
-        sscanf(buffer,"%f %f %f %f %f %f %f",c,c+1,c+2,v,v+1,v+2,r);
+        sscanf(buffer,"%f %f %f %f %f %f %f %f", 
+          tour_circular_center+0, tour_circular_center+1, tour_circular_center+2,
+          tour_circular_view+0, tour_circular_view+1, tour_circular_view+2,
+          &tour_circular_radius, &tour_circular_angle0);
         continue;
       }
 
@@ -12184,8 +12139,8 @@ int ReadIni2(char *inifile, int localfile){
       }
       if(Match(buffer, "VIEWTIMES") == 1){
         if(fgets(buffer, 255, stream) == NULL)break;
-        sscanf(buffer, "%f %f %i", &view_tstart, &view_tstop, &view_ntimes);
-        if(view_ntimes<2)view_ntimes = 2;
+        sscanf(buffer, "%f %f %i", &tour_tstart, &tour_tstop, &tour_ntimes);
+        if(tour_ntimes<2)tour_ntimes = 2;
         ReallocTourMemory();
         continue;
       }
@@ -12484,8 +12439,8 @@ int ReadIni2(char *inifile, int localfile){
               touri->nkeyframes = nkeyframes;
 
               if(NewMemory((void **)&touri->keyframe_times, nkeyframes*sizeof(float)) == 0)return 2;
-              if(NewMemory((void **)&touri->pathnodes, view_ntimes*sizeof(pathdata)) == 0)return 2;
-              if(NewMemory((void **)&touri->path_times, view_ntimes*sizeof(float)) == 0)return 2;
+              if(NewMemory((void **)&touri->pathnodes,  tour_ntimes*sizeof(pathdata)) == 0)return 2;
+              if(NewMemory((void **)&touri->path_times, tour_ntimes*sizeof(float)) == 0)return 2;
 
               thisframe = &touri->first_frame;
               for(j = 0; j < nkeyframes; j++){
@@ -12670,9 +12625,9 @@ int ReadIni(char *inifile){
   if(use_graphics==1){
     UpdateGlui();
     if(showall_textures==1)TextureShowMenu(MENU_TEXTURE_SHOWALL);
-    if(ncolorbars<=ndefaultcolorbars){
-      InitDefaultColorbars(0);
-    }
+  }
+  if(ncolorbars<=ndefaultcolorbars){
+    InitDefaultColorbars(0);
   }
   updatezoommenu=1;
   GetSliceParams2();
@@ -12899,15 +12854,12 @@ void WriteIniLocal(FILE *fileout){
     fprintf(fileout, " %f %i %f %f %f %f\n", ticki->dlength, ticki->dir, rgbtemp[0], rgbtemp[1], rgbtemp[2], ticki->width);
   }
 
-  {
-    float *c, *r, *v;
-
-    c = tour_circular_center;
-    v = tour_circular_view;
-    r = &tour_circular_radius;
-    fprintf(fileout, "TOURCIRCLE\n");
-    fprintf(fileout, "%f %f %f %f %f %f %f",c[0],c[1],c[2],v[0],v[1],v[2],*r);
-  }
+  fprintf(fileout, "TOURCIRCLE\n");
+  fprintf(fileout, "%f %f %f %f %f %f %f %f", 
+    tour_circular_center[0], 
+    tour_circular_center[1], tour_circular_center[2],
+    tour_circular_view[0], tour_circular_view[1], tour_circular_view[2],
+    tour_circular_radius, tour_circular_angle0);
   fprintf(fileout, "TOURINDEX\n");
   fprintf(fileout, " %i\n", selectedtour_index);
   startup_count = 0;
@@ -13205,7 +13157,7 @@ void WriteIni(int flag,char *filename){
   fprintf(fileout, " %i %i %i %i %i %i\n", colorsplit[6], colorsplit[7], colorsplit[8], colorsplit[9], colorsplit[10], colorsplit[11]);
   fprintf(fileout, " %f %f %f\n", splitvals[0], splitvals[1], splitvals[2]);
   fprintf(fileout,"CO2COLOR\n");
-  fprintf(fileout," %i %i %i", global_co2color[0],global_co2color[1],global_co2color[2]);
+  fprintf(fileout," %i %i %i", co2_color_int255[0],co2_color_int255[1],co2_color_int255[2]);
   fprintf(fileout, "DIRECTIONCOLOR\n");
   fprintf(fileout, " %f %f %f\n", direction_color[0], direction_color[1], direction_color[2]);
   fprintf(fileout, "FLIP\n");
@@ -13352,11 +13304,7 @@ void WriteIni(int flag,char *filename){
   fprintf(fileout, "ISOZIPSTEP\n");
   fprintf(fileout, " %i\n", isozipstep);
   fprintf(fileout, "LOADINC\n");
-#ifdef pp_CSLICE
   fprintf(fileout, " %i %i\n", load_incremental,use_cslice);
-#else
-  fprintf(fileout, " %i\n", load_incremental);
-#endif
   fprintf(fileout, "NOPART\n");
   fprintf(fileout, " %i\n", nopart);
   fprintf(fileout, "SHOWFEDAREA\n");
@@ -13416,6 +13364,8 @@ void WriteIni(int flag,char *filename){
   fprintf(fileout, " %i %i\n", freeze_volsmoke, autofreeze_volsmoke);
   fprintf(fileout, "GEOMBOUNDARYPROPS\n");
   fprintf(fileout, " %i %i %i %f %f\n",show_boundary_shaded, show_boundary_outline, show_boundary_points, geomboundary_linewidth, geomboundary_pointsize);
+  fprintf(fileout, "GEOMOFFSET\n");
+  fprintf(fileout, " %f %f %f %i\n", geom_delx, geom_dely, geom_delz, show_geom_bndf);
   fprintf(fileout, "GEOMCELLPROPS\n");
   fprintf(fileout, " %i\n",
     slice_celltype);
@@ -13722,6 +13672,8 @@ void WriteIni(int flag,char *filename){
     fprintf(fileout, "COLORBARTYPE\n");
     fprintf(fileout, " %i %s %s \n", colorbartype, percen, cb->label);
   }
+  fprintf(fileout, "CO2COLORMAP\n");
+  fprintf(fileout, " %i %i\n", co2_colormap_type, co2_colorbar_index);
   {
     int mmin[3], mmax[3];
     for(i = 0; i < 3; i++){
@@ -13734,9 +13686,9 @@ void WriteIni(int flag,char *filename){
       mmax[0], mmax[1], mmax[2]);
   }
   fprintf(fileout, "FIRECOLOR\n");
-  fprintf(fileout, " %i %i %i\n", fire_red, fire_green, fire_blue);
+  fprintf(fileout, " %i %i %i\n", fire_color_int255[0], fire_color_int255[1], fire_color_int255[2]);
   fprintf(fileout, "FIRECOLORMAP\n");
-  fprintf(fileout, " %i %i\n", firecolormap_type, fire_colorbar_index);
+  fprintf(fileout, " %i %i\n", fire_colormap_type, fire_colorbar_index);
   fprintf(fileout, "FIREDEPTH\n");
   fprintf(fileout, " %f %f\n", fire_halfdepth, co2_halfdepth);
   if(ncolorbars > ndefaultcolorbars){
@@ -13764,7 +13716,7 @@ void WriteIni(int flag,char *filename){
     fprintf(fileout, " %i %i %i\n", show_extremedata, show_extreme_mindata, show_extreme_maxdata);
   }
   fprintf(fileout, "SMOKECOLOR\n");
-  fprintf(fileout, " %i %i %i\n", smoke_red, smoke_green, smoke_blue);
+  fprintf(fileout, " %i %i %i\n", smoke_color_int255[0], smoke_color_int255[1], smoke_color_int255[2]);
   fprintf(fileout, "SMOKECULL\n");
   fprintf(fileout," %i\n",smokecullflag);
   if(ABS(smoke_albedo - smoke_albedo_base) > 0.001){
@@ -13835,7 +13787,7 @@ void WriteIni(int flag,char *filename){
   fprintf(fileout, "VIEWALLTOURS\n");
   fprintf(fileout, " %i\n", viewalltours);
   fprintf(fileout, "VIEWTIMES\n");
-  fprintf(fileout, " %f %f %i\n", view_tstart, view_tstop, view_ntimes);
+  fprintf(fileout, " %f %f %i\n", tour_tstart, tour_tstop, tour_ntimes);
   fprintf(fileout, "VIEWTOURFROMPATH\n");
   fprintf(fileout," %i\n",viewtourfrompath);
 

@@ -154,7 +154,7 @@ void UpdateFrameNumber(int changetime){
 
         i = slice_loaded_list[ii];
         sd = sliceinfo+i;
-        if(sd->slicefile_type == SLICE_GEOM){
+        if(sd->slice_filetype == SLICE_GEOM){
           patchdata *patchi;
 
           patchi = sd->patchgeom;
@@ -363,7 +363,7 @@ void UpdateShow(void){
       i=slice_loaded_list[ii];
       sd = sliceinfo+i;
       if(sd->display==0||sd->slicefile_labelindex!=slicefile_labelindex)continue;
-      if(sd->volslice==1&&sd->slicefile_type==SLICE_NODE_CENTER&&vis_gslice_data==1)SHOW_gslice_data=1;
+      if(sd->volslice==1&&sd->slice_filetype==SLICE_NODE_CENTER&&vis_gslice_data==1)SHOW_gslice_data=1;
       if(sd->ntimes>0){
         sliceflag=1;
         break;
@@ -460,7 +460,7 @@ void UpdateShow(void){
       sd = sliceinfo + vd->ival;
 
       if(sd->slicefile_labelindex!=slicefile_labelindex)continue;
-      if(sd->volslice==1&&sd->slicefile_type==SLICE_NODE_CENTER&&vis_gslice_data==1)SHOW_gslice_data=1;
+      if(sd->volslice==1&&sd->slice_filetype==SLICE_NODE_CENTER&&vis_gslice_data==1)SHOW_gslice_data=1;
       vsliceflag=1;
       break;
     }
@@ -643,10 +643,10 @@ void UpdateShow(void){
 
   if(showtime2==1)showtime=1;
   if(plotstate==DYNAMIC_PLOTS&&stept==1){
-    glutIdleFunc(IdleCB);
+    if(use_graphics==1)glutIdleFunc(IdleCB);
   }
   else{
-    glutIdleFunc(NULL);
+    if(use_graphics==1)glutIdleFunc(NULL);
   }
 }
 
@@ -752,7 +752,7 @@ void SynchTimes(void){
       slicedata *sd;
 
       sd = sliceinfo + slice_loaded_list[jj];
-      if(sd->slicefile_type == SLICE_GEOM){
+      if(sd->slice_filetype == SLICE_GEOM){
         sd->patchgeom->geom_timeslist[n] = GetItime(n, sd->patchgeom->geom_timeslist, sd->patchgeom->geom_times, sd->ntimes);
       }
       else{
@@ -1128,11 +1128,12 @@ void UpdateTimes(void){
   if(nglobal_times>0){
     int i;
     NewMemory((void **)&global_times, nglobal_times*sizeof(float));
-    for(i = 0; i<nglobal_times; i++){
+    global_times[0] = global_timemin;
+    for(i = 1; i<nglobal_times; i++){
       float f1;
 
       f1 = (float)i/(float)(nglobal_times-1);
-      global_times[i] = (1.0-f1)*global_timemin + f1*global_timemax;
+      global_times[i] = (1.0-f1)*global_timemin+f1*global_timemax;
     }
   }
 
@@ -1224,7 +1225,7 @@ void UpdateTimes(void){
     slicedata *sd;
 
     sd = sliceinfo + i;
-    if(sd->slicefile_type == SLICE_GEOM){
+    if(sd->slice_filetype == SLICE_GEOM){
       FREEMEMORY(sd->patchgeom->geom_timeslist);
       if(nglobal_times > 0)NewMemory((void **)&(sd->patchgeom->geom_timeslist), nglobal_times * sizeof(int));
     }
@@ -1468,7 +1469,7 @@ void UpdateTimes(void){
       slicedata *sd;
 
       sd = sliceinfo + i;
-      if(sd->loaded==0||sd->display==0||sd->slicefile_type!=SLICE_TERRAIN)continue;
+      if(sd->loaded==0||sd->display==0||sd->slice_filetype!=SLICE_TERRAIN)continue;
       show_slice_terrain=1;
       break;
     }
@@ -1705,6 +1706,10 @@ void UpdateColorTable(colortabledata *ctableinfo, int nctableinfo){
 /* ------------------ UpdateShowScene ------------------------ */
 
 void UpdateShowScene(void){
+  if(update_times==1){
+    update_times = 0;
+    UpdateTimes();
+  }
   if(update_smoketype_vals==1){
     update_smoketype_vals = 0;
 #define SMOKE_NEW 77
@@ -1826,12 +1831,10 @@ void UpdateFlippedColorbar(void){
 void UpdateDisplay(void){
 
   LOCK_IBLANK;
- #ifdef pp_TISO
   if(update_texturebar==1){
     update_texturebar = 0;
     UpdateTexturebar();
   }
-#endif
   if(update_setvents==1){
     SetVentDirs();
     update_setvents=0;
@@ -1895,6 +1898,10 @@ void UpdateDisplay(void){
     SmokeColorbarMenu(fire_colorbar_index_ini);
     update_fire_colorbar_index = 0;
   }
+  if(update_co2_colorbar_index==1){
+    UpdateCO2ColorbarList(co2_colorbar_index_ini);
+    update_co2_colorbar_index = 0;
+  }
   if(update_colorbar_select_index == 1 && colorbar_select_index >= 0 && colorbar_select_index <= 255){
     update_colorbar_select_index = 0;
     UpdateRGBColors(colorbar_select_index);
@@ -1917,5 +1924,9 @@ void UpdateDisplay(void){
   if(update_visColorbarVertical==1){
     update_visColorbarVertical = 0;
     visColorbarVertical = visColorbarVertical_val;
+  }
+  if(update_windrose==1){
+    update_windrose = 0;
+    DeviceData2WindRose(nr_windrose, ntheta_windrose);
   }
 }

@@ -530,7 +530,11 @@ void CheckTimeBound(void){
   int i;
 
   if((timebar_drag==0&&itimes>nglobal_times-1)||(timebar_drag==1&&itimes<0)){
-    izone=0;
+    if(timebar_drag==0){
+      if(itimes>nglobal_times-1)itime_cycle++;
+      if(itimes<0)itime_cycle--;
+    }
+    izone = 0;
     itimes=first_frame_index;
     if(render_status==RENDER_ON){
       RenderMenu(RenderCancel);
@@ -916,7 +920,7 @@ void MouseCB(int button, int state, int xm, int ym){
     timebar_drag=0;
     colorbar_drag=0;
     colorbar_splitdrag=0;
-    glutSetCursor(GLUT_CURSOR_LEFT_ARROW);
+    GLUTSETCURSOR(GLUT_CURSOR_LEFT_ARROW);
     UpdateTrainerMoves();
     return;
   }
@@ -939,7 +943,7 @@ void MouseCB(int button, int state, int xm, int ym){
     last_mouse_time=this_mouse_time;
   }
   if(button==GLUT_LEFT_BUTTON||button==GLUT_MIDDLE_BUTTON||button==GLUT_RIGHT_BUTTON){
-    glutSetCursor(GLUT_CURSOR_INFO);
+    GLUTSETCURSOR(GLUT_CURSOR_INFO);
 
     /* edit blockages */
 
@@ -1902,10 +1906,6 @@ void Keyboard(unsigned char key, int flag){
       if(visiso==1&&cache_qdata==1)UpdateSurface();
       UpdatePlot3dListIndex();
       break;
-    case 'P':
-      cursorPlot3D=1-cursorPlot3D;
-      UpdateCursorCheckbox();
-      break;
     case 'q':
     case 'Q':
       blocklocation++;
@@ -2172,7 +2172,8 @@ void Keyboard(unsigned char key, int flag){
     case 'x':
     case 'X':
       if(keystate==GLUT_ACTIVE_ALT){
-        DialogMenu(DIALOG_HIDEALL); // close all dialogs
+        if(key2=='x')DialogMenu(DIALOG_HIDEALL);
+        if(key2=='X')DialogMenu(DIALOG_SHRINKALL);
       }
       else{
         visx_all=1-visx_all;
@@ -2199,8 +2200,8 @@ void Keyboard(unsigned char key, int flag){
       break;
     case '0':
       if(plotstate==DYNAMIC_PLOTS){
+        itime_cycle = 0;
         UpdateTimes();
-        reset_time_flag=1;
         return;
       }
       break;
@@ -2497,26 +2498,11 @@ void SpecialKeyboardCB(int key, int x, int y){
 
   glutPostRedisplay();
 
-  switch(cursorPlot3D){
-    case 0:
-      if(rotation_type==EYE_CENTERED){
-        keymode=EYE_MODE;
-      }
-      else{
-        keymode=P3_MODE;
-      }
-      break;
-    case 1:
-      if(visGrid!=noGridnoProbe||plotstate==STATIC_PLOTS||ReadVolSlice==1){
-        keymode=P3_MODE;
-      }
-      else{
-        keymode=EYE_MODE;
-      }
-      break;
-    default:
-      ASSERT(FFALSE);
-      break;
+  if(rotation_type==EYE_CENTERED){
+    keymode=EYE_MODE;
+  }
+  else{
+    keymode=P3_MODE;
   }
 
   switch(keymode){
@@ -2878,7 +2864,7 @@ void IdleCB(void){
 
   if(render_status == RENDER_ON && from_DisplayCB==0)return;
   CheckMemory;
-  glutSetWindow(mainwindow_id);
+  if(use_graphics==1)glutSetWindow(mainwindow_id);
   UpdateShow();
   START_TICKS(thistime);
   thisinterval = thistime - lasttime;
@@ -2895,7 +2881,7 @@ void IdleCB(void){
   }
   UpdateFrameNumber(changetime);
   if(redisplay==1){
-    glutPostRedisplay();
+    GLUTPOSTREDISPLAY;
   }
 }
 
@@ -3244,7 +3230,7 @@ void DoScript(void){
     }
     if(render_status==RENDER_OFF){   // don't advance command if Smokeview is executing a RENDERALL command
       current_script_command++;
-      script_render_flag= RunScript();
+      script_render_flag= RunScriptCommand(current_script_command);
       if(runscript==2&&noexit==0&&current_script_command==NULL){
         exit(0);
       }
@@ -3281,6 +3267,24 @@ void DoScript(void){
   }
 }
 #endif
+
+/* ------------------ DoScriptHtml ------------------------ */
+
+#ifdef pp_HTML
+void DoScriptHtml(void){
+  int i;
+
+  CompileScript(default_script->file);
+  for(i=0;i<nscriptinfo;i++){
+    scriptdata *scripti;
+
+    scripti = scriptinfo + i;
+    if(scripti->need_graphics==1)continue;
+    RunScriptCommand(scripti);
+  }
+}
+#endif
+
 
 /* ------------------ IdleDisplay ------------------------ */
 
