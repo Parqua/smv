@@ -2,10 +2,10 @@
 
 :: ---- FDS and smokeview version ----
 
-set fds_version=FDS6.7.1
-set smv_version=SMV6.7.6
-set fds_versionbase=6.7.1
-set smv_versionbase=6.7.6
+set fds_version=FDS6.7.1R407
+set smv_version=SMV6.7.6R197
+set fds_versionbase=6.7.1R407
+set smv_versionbase=6.7.6R197
 set fds_edition=FDS6
 set fds_debug=0
 
@@ -22,7 +22,7 @@ if exist %userprofile%\.bundle\fds_revision.txt (
 
 :: ---- log entry date ----
 
-set smvlogdate="12-Feb-2019"
+set smvlogdate="10-Apr-2019"
 
 :: ---- repo locations ----
 
@@ -41,12 +41,16 @@ set misc_dir=fire-notes/INSTALL/LIBS/LINUX/LIB64
 
 :: set to INTEL if using Intel MPI library
 set linux_mpi_version=INTEL
+set linux_intel_mpi_version=19u4
+
 set osx_mpi_version=3.1.2
 ::set osx_mpi_version=1.8.4
 
 :: ---- INTEL compiler version ----
 
-set INTELVERSION=INTEL19U1
+set INTELVERSION=INTEL19U4
+set linux_comp_version=19u4
+set osx_comp_version=19u4
 
 :: ---- Guide locations ----
 
@@ -67,6 +71,9 @@ set firebothome=/home2/smokevis2/firebot
 
 set smokebotrepo=/home2/smokevis2/smokebot/FireModels_central
 set smokebothome=/home2/smokevis2/smokebot
+
+:: plink options
+set plink_options=-no-antispoof
 
 :: ---- hostnames ----
 
